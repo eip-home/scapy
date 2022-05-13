@@ -656,7 +656,8 @@ _hbhopts = {0x00: "Pad1",
             0x05: "Router Alert",
             0x06: "Quick-Start",
             0xc2: "Jumbo Payload",
-            0xc9: "Home Address Option"}
+            0xc9: "Home Address Option",
+            0x3e: "EIP"}
 
 
 class _OTypeField(ByteEnumField):
