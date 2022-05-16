@@ -2,10 +2,10 @@
 
 from scapy.compat import orb
 from scapy.packet import Packet
-from scapy.fields import ByteEnumField, FieldLenField, \
+from scapy.fields import ByteEnumField, FieldLenField, NBytesField, \
     ShortField, StrLenField, BitField, PacketListField, \
     ShortEnumField, ByteField, IntField, XNBytesField
-from scapy.layers.inet6 import _hbhopts, _OptionsField, _OTypeField
+from scapy.layers.inet6 import _hbhopts, _hbhoptcls, _OptionsField, _OTypeField
 
 _eipiels_base = {
     0x01: "Short Identifier"
@@ -73,45 +73,83 @@ class EIPHmac(Packet):
             
         return super().post_build(pkt, pay)
 
-class EipIeBaseUnknown(Packet):
+class EipIeUnknown(Packet):
 
-    name = "EIP Unknown Base Information Element"
+    name = "EIP Unknown Information Element"
 
     fields_desc = [
         BitField("code", 2, 2),
         BitField("len", None, 6),
-        ByteEnumField("type", None, _eipiels_base),
-        ShortField("valuefixed", None),
+        NBytesField("unknown",None,3),
         StrLenField("value", "", length_from=lambda pkt: pkt.len * 4)
     ]
 
     @classmethod
     def dispatch_hook(cls, _pkt=None, *args, **kargs):
         if _pkt:
-            o = orb(_pkt[1])  # IE type
-            if o in _eipiels_cls:
-                return _eipiels_cls[o]
+            o = orb(_pkt[0])  # IE type
+            o = o >> 6
+            if o == 1:
+                print ("uno")
+                o = orb(_pkt[1])  # IE type
+                print ("codice" )
+                print (o)
+                if o in _eipiels_cls:
+                    print ("yes")
+                    return _eipiels_cls[o]
+            elif o == 2:
+                print ("due")
+                o = orb(_pkt[1])*256+orb(_pkt[2])  # IE extended type
+                if o in _eipiels_ext_cls:
+                    return _eipiels_ext_cls[o]
+            elif o == 3:
+                pass
+        print ("cls")
         return cls
 
-class EipIeExtUnknown(Packet):
+# class EipIeBaseUnknown(Packet):
 
-    name = "EIP Unknown Ext Information Element"
+#     name = "EIP Unknown Base Information Element"
 
-    fields_desc = [
-        BitField("code", 2, 2),
-        BitField("len", None, 6),
-        ShortEnumField("type", None, _eipiels_ext),
-        ByteField("valuefixed", None),
-        StrLenField("value", "", length_from=lambda pkt: pkt.len * 4)
-    ]
+#     fields_desc = [
+#         BitField("code", 2, 2),
+#         BitField("len", None, 6),
+#         ByteEnumField("type", None, _eipiels_base),
+#         ShortField("valuefixed", None),
+#         StrLenField("value", "", length_from=lambda pkt: pkt.len * 4)
+#     ]
 
-    @classmethod
-    def dispatch_hook(cls, _pkt=None, *args, **kargs):
-        if _pkt:
-            o = orb(_pkt[1])*256+orb(_pkt[2])  # IE extended type
-            if o in _eipiels_ext_cls:
-                return _eipiels_ext_cls[o]
-        return cls
+#     @classmethod
+#     def dispatch_hook(cls, _pkt=None, *args, **kargs):
+#         print ("dopo uno")
+#         if _pkt:
+#             o = orb(_pkt[1])  # IE type
+#             print ("codice" )
+#             print (o)
+#             if o in _eipiels_cls:
+#                 return _eipiels_cls[o]
+#         return cls
+
+# class EipIeExtUnknown(Packet):
+
+#     name = "EIP Unknown Ext Information Element"
+
+#     fields_desc = [
+#         BitField("code", 2, 2),
+#         BitField("len", None, 6),
+#         ShortEnumField("type", None, _eipiels_ext),
+#         ByteField("valuefixed", None),
+#         StrLenField("value", "", length_from=lambda pkt: pkt.len * 4)
+#     ]
+
+#     @classmethod
+#     def dispatch_hook(cls, _pkt=None, *args, **kargs):
+#         print ("dopo due")
+#         if _pkt:
+#             o = orb(_pkt[1])*256+orb(_pkt[2])  # IE extended type
+#             if o in _eipiels_ext_cls:
+#                 return _eipiels_ext_cls[o]
+#         return cls
 
 
 class EIP(Packet):
@@ -127,7 +165,7 @@ class EIP(Packet):
     fields_desc = [
         _OTypeField("otype", 0x3e, _hbhopts),
         FieldLenField("len", None, length_of="ielems", fmt="B"),
-        PacketListField("ielems", None, EipIeBaseUnknown,
+        PacketListField("ielems", [], EipIeUnknown,
                       length_from=lambda pkt: pkt.len)
     ]
 
@@ -148,5 +186,5 @@ _eipiels_ext_cls = {
 }
 
 
-
-_hbhopts['0x3e'] = EIP
+_hbhoptcls [0x3e] = EIP
+_hbhopts[0x3e] = "EIP"

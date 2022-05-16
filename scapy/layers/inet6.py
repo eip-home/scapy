@@ -46,6 +46,7 @@ from scapy.fields import BitEnumField, BitField, ByteEnumField, ByteField, \
     LongField, MACField, PacketLenField, PacketListField, ShortEnumField, \
     ShortField, SourceIP6Field, StrField, StrFixedLenField, StrLenField, \
     X3BytesField, XBitField, XIntField, XShortField
+#from scapy.layers.eip import EIP
 from scapy.layers.inet import IP, IPTools, TCP, TCPerror, TracerouteResult, \
     UDP, UDPerror
 from scapy.layers.l2 import CookedLinux, Ether, GRE, Loopback, SNAP
@@ -656,8 +657,7 @@ _hbhopts = {0x00: "Pad1",
             0x05: "Router Alert",
             0x06: "Quick-Start",
             0xc2: "Jumbo Payload",
-            0xc9: "Home Address Option",
-            0x3e: "EIP"}
+            0xc9: "Home Address Option"}
 
 
 class _OTypeField(ByteEnumField):
