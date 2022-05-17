@@ -4,7 +4,7 @@ from scapy.compat import orb
 from scapy.packet import Packet
 from scapy.fields import ByteEnumField, FieldLenField, NBytesField, \
     ShortField, StrLenField, BitField, PacketListField, \
-    ShortEnumField, ByteField, IntField, XNBytesField
+    ShortEnumField, ByteField, IntField, XNBytesField, XStrLenField
 from scapy.layers.inet6 import _hbhopts, _hbhoptcls, _OptionsField, _OTypeField
 
 _eipiels_base = {
@@ -12,8 +12,13 @@ _eipiels_base = {
 }
 
 _eipiels_ext = {
-    0x0001: "HMAC"
+    0x0001: "HMAC",
+    0x0002: "CPT"
 }
+
+class HMACField(StrLenField):
+      def i2repr(self, pkt, x):
+            return ' '.join(b.encode('hex') for b in x)
 
 
 class EIPBase(Packet):
@@ -46,6 +51,38 @@ class EIPShortIdentifier(Packet):
         ByteEnumField("type", 0x01, _eipiels_base),
         ShortField("id", 0xCCCC)
     ]
+
+    def extract_padding(self, p):
+        return b"", p
+    
+    
+class EIPCPT(Packet):
+
+    # we are adding by default 8 bytes HMAC initialized with
+    # b"\00\01\02\03\04\05\06\07"
+    # we are also adding a key id inizialized with 0x1234
+
+    name = "EIP CPT"
+    fields_desc = [
+        BitField("code", 2, 2),
+        BitField("len", None, 6),
+        #FieldLenField("lennew", None, length_of="hmac", fmt="B"),
+        ShortEnumField("type", 0x0002, _eipiels_ext),
+        BitField("version", 0, 3),
+        BitField("reserved", 0, 5),
+        StrLenField("mcdstack", 40 * b"\00", length_from=lambda pkt: pkt.len * 4)
+    ]
+
+    def extract_padding(self, p):
+        return b"", p
+
+    def post_build(self, pkt: bytes, pay: bytes) -> bytes:
+        if self.len is None:
+            var_len = int((len(pkt)-8)/4)
+            my_list = [pkt[0] | var_len ]
+            pkt = bytes(my_list) + pkt[1:]
+            
+        return super().post_build(pkt, pay)
     
     
 class EIPHmac(Packet):
@@ -62,8 +99,11 @@ class EIPHmac(Packet):
         ShortEnumField("type", 0x0001, _eipiels_ext),
         ByteField("reserved", 0xFF),
         IntField("keyid", 0x1234),
-        StrLenField("hmac", b"\00\01\02\03\04\05\06\07", length_from=lambda pkt: pkt.len)
+        XStrLenField("hmac", b"\00\01\02\03\04\05\06\07", length_from=lambda pkt: pkt.len * 4)
     ]
+
+    def extract_padding(self, p):
+        return b"", p
 
     def post_build(self, pkt: bytes, pay: bytes) -> bytes:
         if self.len is None:
@@ -83,6 +123,9 @@ class EipIeUnknown(Packet):
         NBytesField("unknown",None,3),
         StrLenField("value", "", length_from=lambda pkt: pkt.len * 4)
     ]
+
+    def extract_padding(self, p):
+        return b"", p
 
     @classmethod
     def dispatch_hook(cls, _pkt=None, *args, **kargs):
@@ -169,8 +212,11 @@ class EIP(Packet):
                       length_from=lambda pkt: pkt.len)
     ]
 
-    def alignment_delta(self, curpos):  # alignment requirement : 8n+6
-        x = 8
+    def extract_padding(self, p):
+        return b"", p
+
+    def alignment_delta(self, curpos):  # alignment requirement : 4n+6
+        x = 4
         y = 6
         delta = x * ((curpos - y + x - 1) // x) + y - curpos
         return delta
@@ -182,7 +228,8 @@ _eipiels_cls = {
 
 
 _eipiels_ext_cls = {
-    0x0001: EIPHmac   
+    0x0001: EIPHmac,
+    0x0002: EIPCPT
 }
 
 
