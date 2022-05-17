@@ -1,11 +1,29 @@
 #!/usr/bin/python
 
 from scapy.compat import orb
+from scapy.error import Scapy_Exception
 from scapy.packet import Packet
-from scapy.fields import ByteEnumField, FieldLenField, NBytesField, \
+from scapy.fields import BitFieldLenField, ByteEnumField, FieldLenField, NBytesField, \
     ShortField, StrLenField, BitField, PacketListField, \
     ShortEnumField, ByteField, IntField, XNBytesField, XStrLenField
 from scapy.layers.inet6 import _hbhopts, _hbhoptcls, _OptionsField, _OTypeField
+
+
+class HMACInvalidLengthField(Scapy_Exception):
+    """
+    basic frame structure not standard conform
+    (missing TLV, invalid order or multiplicity)
+    """
+    pass
+
+
+class MCDStackInvalidLengthField(Scapy_Exception):
+    """
+    basic frame structure not standard conform
+    (missing TLV, invalid order or multiplicity)
+    """
+    pass
+
 
 _eipiels_base = {
     0x01: "Short Identifier"
@@ -16,9 +34,9 @@ _eipiels_ext = {
     0x0002: "CPT"
 }
 
-class HMACField(StrLenField):
-      def i2repr(self, pkt, x):
-            return ' '.join(b.encode('hex') for b in x)
+# class HMACField(StrLenField):
+#       def i2repr(self, pkt, x):
+#             return ' '.join(b.encode('hex') for b in x)
 
 
 class EIPBase(Packet):
@@ -58,31 +76,46 @@ class EIPShortIdentifier(Packet):
     
 class EIPCPT(Packet):
 
-    # we are adding by default 8 bytes HMAC initialized with
-    # b"\00\01\02\03\04\05\06\07"
-    # we are also adding a key id inizialized with 0x1234
+    # we are adding by default 8 bytes MCD stack initialized with
+    # 40 b"\00"
 
     name = "EIP CPT"
     fields_desc = [
         BitField("code", 2, 2),
-        BitField("len", None, 6),
+        #BitField("len", None, 6),
+        BitFieldLenField("len", None, 6, length_of="mcdstack", adjust=lambda _,x: int((x+4)/4)),
         #FieldLenField("lennew", None, length_of="hmac", fmt="B"),
         ShortEnumField("type", 0x0002, _eipiels_ext),
         BitField("version", 0, 3),
         BitField("reserved", 0, 5),
-        StrLenField("mcdstack", 40 * b"\00", length_from=lambda pkt: pkt.len * 4)
+        XStrLenField("mcdstack", 40 * b"\x00", length_from=lambda pkt: 0 if pkt.len is None else (pkt.len * 4)-4)
     ]
 
     def extract_padding(self, p):
         return b"", p
 
-    def post_build(self, pkt: bytes, pay: bytes) -> bytes:
-        if self.len is None:
-            var_len = int((len(pkt)-4)/4)
-            my_list = [pkt[0] | var_len ]
-            pkt = bytes(my_list) + pkt[1:]
+    # def post_build(self, pkt: bytes, pay: bytes) -> bytes:
+    #     if self.len is None:
+    #         var_len = int((len(pkt)-4)/4)
+    #         my_list = [pkt[0] | var_len ]
+    #         pkt = bytes(my_list) + pkt[1:]
             
-        return super().post_build(pkt, pay)
+    #     return super().post_build(pkt, pay)
+
+    def _check(self):
+        """
+        run layer specific checks
+        """
+        mcdstack_len = len(self.mcdstack)
+        pass  # TODO: add checks on the MCD length
+
+    def post_dissect(self, s):
+        self._check()
+        return super().post_dissect(s)
+
+    def do_build(self):
+        self._check()
+        return super().do_build()
     
     
 class EIPHmac(Packet):
@@ -94,24 +127,43 @@ class EIPHmac(Packet):
     name = "EIP HMAC"
     fields_desc = [
         BitField("code", 2, 2),
-        BitField("len", None, 6),
+        #BitField("len", None, 6),
+        BitFieldLenField("len", None, 6, length_of="hmac", adjust=lambda _,x: int((x+4)/4)),
         #FieldLenField("lennew", None, length_of="hmac", fmt="B"),
         ShortEnumField("type", 0x0001, _eipiels_ext),
         ByteField("reserved", 0xFF),
         IntField("keyid", 0x1234),
-        XStrLenField("hmac", b"\00\01\02\03\04\05\06\07", length_from=lambda pkt: pkt.len * 4)
+        XStrLenField("hmac", b"\x00\x01\x02\x03\x04\x05\x06\x07", length_from=lambda pkt: 0 if pkt.len is None else (pkt.len * 4)-4)
     ]
 
     def extract_padding(self, p):
         return b"", p
 
-    def post_build(self, pkt: bytes, pay: bytes) -> bytes:
-        if self.len is None:
-            var_len = int((len(pkt)-4)/4)
-            my_list = [pkt[0] | var_len ]
-            pkt = bytes(my_list) + pkt[1:]
+    # def post_build(self, pkt: bytes, pay: bytes) -> bytes:
+    #     if self.len is None:
+    #         var_len = int((len(pkt)-4)/4)
+    #         my_list = [pkt[0] | var_len ]
+    #         pkt = bytes(my_list) + pkt[1:]
             
-        return super().post_build(pkt, pay)
+    #     return super().post_build(pkt, pay)
+
+    def _check(self):
+        """
+        run layer specific checks
+        """
+        hmac_len = len(self.hmac)
+        if hmac_len % 8 != 0 or hmac_len > 32:
+            raise HMACInvalidLengthField(
+                'hmac must be in multiples of 8 octets, at most 32 octets long - '
+                'got hmac of size {}'.format(hmac_len))
+
+    def post_dissect(self, s):
+        self._check()
+        return super().post_dissect(s)
+
+    def do_build(self):
+        self._check()
+        return super().do_build()
 
 class EipIeUnknown(Packet):
 
@@ -119,9 +171,9 @@ class EipIeUnknown(Packet):
 
     fields_desc = [
         BitField("code", 2, 2),
-        BitField("len", None, 6),
+        BitFieldLenField("len", None, 6, length_of="value", adjust=lambda pkt,x: int((x+4)/4)),
         NBytesField("unknown",None,3),
-        StrLenField("value", "", length_from=lambda pkt: pkt.len * 4)
+        StrLenField("value", "", length_from=lambda pkt: 0 if pkt.len is None else (pkt.len * 4)-4)
     ]
 
     def extract_padding(self, p):

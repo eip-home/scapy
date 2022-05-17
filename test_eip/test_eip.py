@@ -13,5 +13,6 @@ if __name__ == '__main__':
     #        IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPShortIdentifier(), EIPHmac()])])
     #        IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPShortIdentifier(), EIPShortIdentifier(), EIPShortIdentifier()])])
     pkt = Ether(src='90:e2:ba:84:d5:ec', dst='90:e2:ba:84:d7:78') / IPv6(src='faaa::1', dst='faaa::2') / \
-            IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPCPT()])])
-    wrpcap('eip_cpt.pcap', pkt, append=False)
+            IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPHmac(hmac=b'\x00\x01\x02\x03\x04\x05\x06\x07')])])
+    #        IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPCPT(mcdstack=b'\x00\x01\x02\x03\x04\x05\x06\x07')])])
+    wrpcap('eip_hmac.pcap', pkt, append=False)
