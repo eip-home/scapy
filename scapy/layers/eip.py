@@ -78,7 +78,7 @@ class EIPCPT(Packet):
 
     def post_build(self, pkt: bytes, pay: bytes) -> bytes:
         if self.len is None:
-            var_len = int((len(pkt)-8)/4)
+            var_len = int((len(pkt)-4)/4)
             my_list = [pkt[0] | var_len ]
             pkt = bytes(my_list) + pkt[1:]
             
@@ -107,7 +107,7 @@ class EIPHmac(Packet):
 
     def post_build(self, pkt: bytes, pay: bytes) -> bytes:
         if self.len is None:
-            var_len = int((len(pkt)-8)/4)
+            var_len = int((len(pkt)-4)/4)
             my_list = [pkt[0] | var_len ]
             pkt = bytes(my_list) + pkt[1:]
             
