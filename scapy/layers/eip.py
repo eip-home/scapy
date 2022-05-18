@@ -34,7 +34,8 @@ class LongIdentifierInvalidLengthField(Scapy_Exception):
 
 
 _eipiels_base = {
-    0x01: "Short Identifier"
+    0x01: "Short Identifier",
+    0x02: "Processing Accelerator"
 }
 
 _eipiels_ext = {
@@ -83,6 +84,20 @@ class EIPShortIdentifier(Packet):
         BitField("len", 0, 6),
         ByteEnumField("type", 0x01, _eipiels_base),
         ShortField("id", 0xCCCC)
+    ]
+
+    def extract_padding(self, p):
+        return b"", p
+
+
+class EIPProcessingAccelerator(Packet):
+
+    name = "EIP Processing Accelerator"
+    fields_desc = [
+        BitField("code", 1, 2),
+        BitField("len", 0, 6),
+        ByteEnumField("type", 0x02, _eipiels_base),
+        ShortField("id", 0)
     ]
 
     def extract_padding(self, p):
@@ -327,7 +342,8 @@ class EIP(Packet):
 
 
 _eipiels_cls = {
-    0x01: EIPShortIdentifier
+    0x01: EIPShortIdentifier,
+    0x02: EIPProcessingAccelerator
 }
 
 
