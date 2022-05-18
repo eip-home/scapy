@@ -54,24 +54,24 @@ idtypes = {
 #             return ' '.join(b.encode('hex') for b in x)
 
 
-class EIPBase(Packet):
+# class EIPBase(Packet):
 
-    name = "EIP 1 byte code"
-    code = 1
+#     name = "EIP 1 byte code"
+#     code = 1
 
-    fields_desc = [
-        BitField("code", code, 2),
-        BitField("len", 0, 6),
-        ByteEnumField("type", None, _eipiels_base),
-        ShortField("id", None)
-    ]
+#     fields_desc = [
+#         BitField("code", code, 2),
+#         BitField("len", 0, 6),
+#         ByteEnumField("type", None, _eipiels_base),
+#         ShortField("id", None)
+#     ]
 
-    def alignment_delta(self, curpos):  # alignment requirement : 8n+0
-        # x = 0
-        # y = 0
-        # delta = x * ((curpos - y + x - 1) // x) + y - curpos
-        # return delta
-        return 0
+#     def alignment_delta(self, curpos):  # alignment requirement : 8n+0
+#         # x = 0
+#         # y = 0
+#         # delta = x * ((curpos - y + x - 1) // x) + y - curpos
+#         # return delta
+#         return 0
 
 
 
