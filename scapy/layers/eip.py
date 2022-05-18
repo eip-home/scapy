@@ -45,7 +45,7 @@ _eipiels_ext = {
 }
 
 idtypes = {
-    0: "Default",
+    0: "Generic Long Identifier only",
     1: "Sequence Number only",
     2: "Sequence Number and Generic Long Identifier"
 }
@@ -83,7 +83,7 @@ class EIPShortIdentifier(Packet):
         BitField("code", 1, 2),
         BitField("len", 0, 6),
         ByteEnumField("type", 0x01, _eipiels_base),
-        ShortField("id", 0xCCCC)
+        ShortField("id", 0)
     ]
 
     def extract_padding(self, p):
@@ -109,7 +109,8 @@ class EIPLongIdentifier(Packet):
     name = "EIP Long Identifier"
     fields_desc = [
         BitField("code", 2, 2),
-        BitFieldLenField("len", None, 6, length_of="id", adjust=lambda _,x: int((x+4)/4)),
+        BitField("len", None, 6),
+        #BitFieldLenField("len", None, 6, length_of="id", adjust=lambda _,x: int((x+4)/4)),
         ShortEnumField("type", 0x0003, _eipiels_ext),
         ByteEnumField("idtype", 0, idtypes),
         ConditionalField(IntField("seqnum", 0), lambda pkt:pkt.idtype in [1, 2]),
@@ -139,6 +140,14 @@ class EIPLongIdentifier(Packet):
     def do_build(self):
         self._check()
         return super().do_build()
+
+    def post_build(self, pkt: bytes, pay: bytes) -> bytes:
+        if self.len is None:
+            var_len = int((len(pkt)-4)/4)
+            my_list = [pkt[0] | var_len ]
+            pkt = bytes(my_list) + pkt[1:]
+            
+        return super().post_build(pkt, pay)
     
     
 class EIPCPT(Packet):
@@ -149,11 +158,11 @@ class EIPCPT(Packet):
     name = "EIP CPT"
     fields_desc = [
         BitField("code", 2, 2),
-        #BitField("len", None, 6),
-        BitFieldLenField("len", None, 6, length_of="mcdstack", adjust=lambda _,x: int((x+4)/4)),
+        BitField("len", None, 6),
+        #BitFieldLenField("len", None, 6, length_of="mcdstack", adjust=lambda _,x: int(x/4)),
         #FieldLenField("lennew", None, length_of="hmac", fmt="B"),
         ShortEnumField("type", 0x0002, _eipiels_ext),
-        BitField("version", 0, 3),
+        BitField("subtype", 0, 3),
         BitField("reserved", 0, 5),
         XStrLenField("mcdstack", 40 * b"\x00", length_from=lambda pkt: 0 if pkt.len is None else (pkt.len * 4)-4)
     ]
@@ -161,13 +170,13 @@ class EIPCPT(Packet):
     def extract_padding(self, p):
         return b"", p
 
-    # def post_build(self, pkt: bytes, pay: bytes) -> bytes:
-    #     if self.len is None:
-    #         var_len = int((len(pkt)-4)/4)
-    #         my_list = [pkt[0] | var_len ]
-    #         pkt = bytes(my_list) + pkt[1:]
+    def post_build(self, pkt: bytes, pay: bytes) -> bytes:
+        if self.len is None:
+            var_len = int((len(pkt)-4)/4)
+            my_list = [pkt[0] | var_len ]
+            pkt = bytes(my_list) + pkt[1:]
             
-    #     return super().post_build(pkt, pay)
+        return super().post_build(pkt, pay)
 
     def _check(self):
         """
@@ -194,25 +203,25 @@ class EIPHmac(Packet):
     name = "EIP HMAC"
     fields_desc = [
         BitField("code", 2, 2),
-        #BitField("len", None, 6),
-        BitFieldLenField("len", None, 6, length_of="hmac", adjust=lambda _,x: int((x+4)/4)),
+        BitField("len", None, 6),
+        #BitFieldLenField("len", None, 6, length_of="hmac", adjust=lambda _,x: int((x+4)/4)),
         #FieldLenField("lennew", None, length_of="hmac", fmt="B"),
         ShortEnumField("type", 0x0001, _eipiels_ext),
-        ByteField("reserved", 0xFF),
-        IntField("keyid", 0x1234),
-        XStrLenField("hmac", b"\x00\x01\x02\x03\x04\x05\x06\x07", length_from=lambda pkt: 0 if pkt.len is None else (pkt.len * 4)-4)
+        ByteField("reserved", 0x00),
+        IntField("keyid", 0),
+        XStrLenField("hmac", b"", length_from=lambda pkt: 0 if pkt.len is None else (pkt.len * 4)-4)
     ]
 
     def extract_padding(self, p):
         return b"", p
 
-    # def post_build(self, pkt: bytes, pay: bytes) -> bytes:
-    #     if self.len is None:
-    #         var_len = int((len(pkt)-4)/4)
-    #         my_list = [pkt[0] | var_len ]
-    #         pkt = bytes(my_list) + pkt[1:]
+    def post_build(self, pkt: bytes, pay: bytes) -> bytes:
+        if self.len is None:
+            var_len = int((len(pkt)-4)/4)
+            my_list = [pkt[0] | var_len ]
+            pkt = bytes(my_list) + pkt[1:]
             
-    #     return super().post_build(pkt, pay)
+        return super().post_build(pkt, pay)
 
     def _check(self):
         """

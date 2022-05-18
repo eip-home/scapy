@@ -6,16 +6,39 @@ from scapy.layers.l2 import Ether
 from scapy.utils import wrpcap
 
 
+def test_eip_short_identifier():
+    pkt = Ether(src='90:e2:ba:84:d5:ec', dst='90:e2:ba:84:d7:78') / IPv6(src='faaa::1', dst='faaa::2') / \
+                IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPShortIdentifier(id=0x1234)])])
+    wrpcap('eip_short.pcap', pkt, append=False)
+
+
+def test_eip_hmac():
+    pkt = Ether(src='90:e2:ba:84:d5:ec', dst='90:e2:ba:84:d7:78') / IPv6(src='faaa::1', dst='faaa::2') / \
+                IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPHmac(keyid=0x1234, hmac=b'\x00\x01\x02\x03\x04\x05\x06\x07')])])
+    wrpcap('eip_hmac.pcap', pkt, append=False)
+
+
 def test_eip_long_identifier():
     pkt = Ether(src='90:e2:ba:84:d5:ec', dst='90:e2:ba:84:d7:78') / IPv6(src='faaa::1', dst='faaa::2') / \
-                IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPLongIdentifier(idtype=2, seqnum=2**32-1, id=b"\x00\x01\x02\x03\x04\x05\x06\07")])])
+                IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPLongIdentifier(idtype=2, seqnum=0x1234, id=b"\x00\x01\x02\x03\x04\x05\x06\07")])])
     wrpcap('eip_long_id.pcap', pkt, append=False)
 
 
 def test_eip_processing_accelerator():
     pkt = Ether(src='90:e2:ba:84:d5:ec', dst='90:e2:ba:84:d7:78') / IPv6(src='faaa::1', dst='faaa::2') / \
-                IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPProcessingAccelerator(id=0xFFFF)])])
+                IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPProcessingAccelerator(id=0x1234)])])
     wrpcap('eip_proc_acc.pcap', pkt, append=False)
+
+def test_short_hmac():
+    pkt = Ether(src='90:e2:ba:84:d5:ec', dst='90:e2:ba:84:d7:78') / IPv6(src='faaa::1', dst='faaa::2') / \
+                IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPShortIdentifier(id=0x1234), EIPHmac(keyid=0x1234, hmac=b'\x00\x01\x02\x03\x04\x05\x06\x07')])])
+    wrpcap('eip_short_hmac.pcap', pkt, append=False)
+
+def test_short_hmac_long():
+    pkt = Ether(src='90:e2:ba:84:d5:ec', dst='90:e2:ba:84:d7:78') / IPv6(src='faaa::1', dst='faaa::2') / \
+                IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPShortIdentifier(id=0x1234), EIPHmac(keyid=0x1234, hmac=b'\x00\x01\x02\x03\x04\x05\x06\x07'), EIPLongIdentifier(idtype=2, seqnum=0x1234, id=b"\x00\x01\x02\x03\x04\x05\x06\07")])])
+    wrpcap('eip_short_hmac_long.pcap', pkt, append=False)
+
 
 
 
@@ -29,5 +52,10 @@ if __name__ == '__main__':
     #        IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPHmac(hmac=b'\x00\x01\x02\x03\x04\x05\x06\x07')])])
     #        IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPCPT(mcdstack=b'\x00\x01\x02\x03\x04\x05\x06\x07')])])
     #wrpcap('eip_hmac.pcap', pkt, append=False)
+    test_eip_short_identifier()
+    test_eip_hmac()
     test_eip_long_identifier()
     test_eip_processing_accelerator()
+    test_short_hmac()
+    test_short_hmac_long()
+    
