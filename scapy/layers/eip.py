@@ -8,6 +8,13 @@ from scapy.fields import BitFieldLenField, ByteEnumField, ConditionalField, Fiel
     ShortEnumField, ByteField, IntField, XNBytesField, XStrLenField
 from scapy.layers.inet6 import _hbhopts, _hbhoptcls, _OptionsField, _OTypeField
 
+ShortIdentifierCode = 0x01
+ProcessingAcceleratorCode = 0x02
+
+HmacCode = 0x0001
+CPTCode = 0x0002
+LongIdentifierCode = 0x0003
+
 
 class HMACInvalidLengthField(Scapy_Exception):
     """
@@ -34,14 +41,14 @@ class LongIdentifierInvalidLengthField(Scapy_Exception):
 
 
 _eipiels_base = {
-    0x01: "Short Identifier",
-    0x02: "Processing Accelerator"
+    ShortIdentifierCode: "Short Identifier",
+    ProcessingAcceleratorCode: "Processing Accelerator"
 }
 
 _eipiels_ext = {
-    0x0001: "HMAC",
-    0x0002: "CPT",
-    0x0003: "Long Identifier"
+    HmacCode: "HMAC",
+    CPTCode: "CPT",
+    LongIdentifierCode: "Long Identifier"
 }
 
 idtypes = {
@@ -82,7 +89,7 @@ class EIPShortIdentifier(Packet):
     fields_desc = [
         BitField("code", 1, 2),
         BitField("len", 0, 6),
-        ByteEnumField("type", 0x01, _eipiels_base),
+        ByteEnumField("type", ShortIdentifierCode, _eipiels_base),
         ShortField("id", 0)
     ]
 
@@ -96,7 +103,7 @@ class EIPProcessingAccelerator(Packet):
     fields_desc = [
         BitField("code", 1, 2),
         BitField("len", 0, 6),
-        ByteEnumField("type", 0x02, _eipiels_base),
+        ByteEnumField("type", ProcessingAcceleratorCode, _eipiels_base),
         ShortField("id", 0)
     ]
 
@@ -111,7 +118,7 @@ class EIPLongIdentifier(Packet):
         BitField("code", 2, 2),
         BitField("len", None, 6),
         #BitFieldLenField("len", None, 6, length_of="id", adjust=lambda _,x: int((x+4)/4)),
-        ShortEnumField("type", 0x0003, _eipiels_ext),
+        ShortEnumField("type", LongIdentifierCode, _eipiels_ext),
         ByteEnumField("idtype", 0, idtypes),
         ConditionalField(IntField("seqnum", 0), lambda pkt:pkt.idtype in [1, 2]),
         ConditionalField(StrLenField("id", "", length_from=lambda pkt: 0 if pkt.len is None else (pkt.len * 4)-4), lambda pkt:pkt.idtype in [0, 2])
@@ -161,7 +168,7 @@ class EIPCPT(Packet):
         BitField("len", None, 6),
         #BitFieldLenField("len", None, 6, length_of="mcdstack", adjust=lambda _,x: int(x/4)),
         #FieldLenField("lennew", None, length_of="hmac", fmt="B"),
-        ShortEnumField("type", 0x0002, _eipiels_ext),
+        ShortEnumField("type", CPTCode, _eipiels_ext),
         BitField("subtype", 0, 3),
         BitField("reserved", 0, 5),
         XStrLenField("mcdstack", 40 * b"\x00", length_from=lambda pkt: 0 if pkt.len is None else (pkt.len * 4)-4)
@@ -206,7 +213,7 @@ class EIPHmac(Packet):
         BitField("len", None, 6),
         #BitFieldLenField("len", None, 6, length_of="hmac", adjust=lambda _,x: int((x+4)/4)),
         #FieldLenField("lennew", None, length_of="hmac", fmt="B"),
-        ShortEnumField("type", 0x0001, _eipiels_ext),
+        ShortEnumField("type", HmacCode, _eipiels_ext),
         ByteField("reserved", 0x00),
         IntField("keyid", 0),
         XStrLenField("hmac", b"", length_from=lambda pkt: 0 if pkt.len is None else (pkt.len * 4)-4)
@@ -351,15 +358,15 @@ class EIP(Packet):
 
 
 _eipiels_cls = {
-    0x01: EIPShortIdentifier,
-    0x02: EIPProcessingAccelerator
+    ShortIdentifierCode: EIPShortIdentifier,
+    ProcessingAcceleratorCode: EIPProcessingAccelerator
 }
 
 
 _eipiels_ext_cls = {
-    0x0001: EIPHmac,
-    0x0002: EIPCPT,
-    0x0003: EIPLongIdentifier,
+    HmacCode: EIPHmac,
+    CPTCode: EIPCPT,
+    LongIdentifierCode: EIPLongIdentifier,
 }
 
 
