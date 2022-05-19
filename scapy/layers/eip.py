@@ -3,13 +3,14 @@
 from scapy.compat import orb
 from scapy.error import Scapy_Exception
 from scapy.packet import Packet
-from scapy.fields import BitFieldLenField, ByteEnumField, ConditionalField, FieldLenField, NBytesField, \
+from scapy.fields import BitEnumField, BitFieldLenField, ByteEnumField, ConditionalField, FieldLenField, NBytesField, \
     ShortField, StrLenField, BitField, PacketListField, \
     ShortEnumField, ByteField, IntField, XNBytesField, XStrLenField
 from scapy.layers.inet6 import _hbhopts, _hbhoptcls, _OptionsField, _OTypeField
 
 ShortIdentifierCode = 0x01
 ProcessingAcceleratorCode = 0x02
+TimestampCode = 0x03
 
 HmacCode = 0x0001
 CPTCode = 0x0002
@@ -40,9 +41,18 @@ class LongIdentifierInvalidLengthField(Scapy_Exception):
     pass
 
 
+class TimestampsInvalidLengthField(Scapy_Exception):
+    """
+    basic frame structure not standard conform
+    (missing TLV, invalid order or multiplicity)
+    """
+    pass
+
+
 _eipiels_base = {
     ShortIdentifierCode: "Short Identifier",
-    ProcessingAcceleratorCode: "Processing Accelerator"
+    ProcessingAcceleratorCode: "Processing Accelerator",
+    TimestampCode: "Timestamp"
 }
 
 _eipiels_ext = {
@@ -109,6 +119,110 @@ class EIPProcessingAccelerator(Packet):
 
     def extract_padding(self, p):
         return b"", p
+
+
+class EIPTimestampField(IntField):
+    re_hmsm = re.compile("([0-2]?[0-9])[Hh:](([0-5]?[0-9])([Mm:]([0-5]?[0-9])([sS:.]([0-9]{0,3}))?)?)?$")  # noqa: E501
+
+    def i2repr(self, pkt, val):
+        if val is None:
+            return "--"
+        else:
+            sec, milli = divmod(val, 1000)
+            min, sec = divmod(sec, 60)
+            hour, min = divmod(min, 60)
+            return "%d:%d:%d.%d" % (hour, min, sec, int(milli))
+
+    def any2i(self, pkt, val):
+        if isinstance(val, str):
+            hmsms = self.re_hmsm.match(val)
+            if hmsms:
+                h, _, m, _, s, _, ms = hmsms.groups()
+                ms = int(((ms or "") + "000")[:3])
+                val = ((int(h) * 60 + int(m or 0)) * 60 + int(s or 0)) * 1000 + ms  # noqa: E501
+            else:
+                val = 0
+        elif val is None:
+            val = int((time.time() % (24 * 60 * 60)) * 1000)
+        return val
+
+
+# class TimestampParamsField(ShortField):
+#     def i2repr(self, pkt, x):
+#         return "%d sec" % (4 * x)
+
+
+class EIPTimestamp(Packet):
+
+    TS_TYPES = {
+        0x01: 'Basic Timestamp LTV',
+    }
+
+    TS_LENGTHS = {
+        0b00: '1 Byte Timestamp',
+        0b01: '2 Bytes Timestamp',
+        0b10: '4 Bytes Timestamp',
+        0b11: '8 Bytes Timestamp',
+    }
+
+    TS_FORMATS = {
+        0b0001: '1 ns Timestamp Format',
+        0b0010: '10 ns Timestamp Format',
+        0b0011: '100 ns Timestamp Format',
+        0b0100: '1 us Timestamp Format',
+        0b0101: '10 us Timestamp Format',
+        0b0110: '100 us Timestamp Format',
+        0b0111: '1 ms Timestamp Format',
+        0b1000: 'NTP (only for 8 bytes) Timestamp Format',
+        0b1001: 'Linux epoch (only for 8 bytes) Timestamp Format',
+    }
+
+    name = "EIP Short Identifier"
+    fields_desc = [
+        BitField("code", 1, 2),
+        BitField("len", 0, 6),
+        ByteEnumField("type", 0x03, _eipiels_base),
+        ByteEnumField("tstype", 0x01, TS_TYPES),
+        BitEnumField("tslen", 0b00, 2, TS_LENGTHS),
+        BitEnumField("tsformat", 0b0001, 4, TS_FORMATS),
+        BitField("reserved", 0, 0),
+        #ShortField("params", 0),
+
+        PacketListField("timestamps", [], EIPTimestampField,
+                        length_from=lambda pkt: pkt.len)
+    ]
+
+    def extract_padding(self, p):
+        return b"", p
+
+    def _check(self):
+        """
+        run layer specific checks
+        """
+        
+        if self.timestamps is not None:
+            timestamps_len = len(self.timestamps)
+            if timestamps_len % 4 != 0:
+                raise TimestampsInvalidLengthField(
+                    'timestamps must be in multiples of 4 octets - '
+                    'got timestamps of size {}'.format(timestamps_len))
+
+
+    def post_dissect(self, s):
+        self._check()
+        return super().post_dissect(s)
+
+    def do_build(self):
+        self._check()
+        return super().do_build()
+
+    def post_build(self, pkt: bytes, pay: bytes) -> bytes:
+        if self.len is None:
+            var_len = int((len(pkt)-4)/4)
+            my_list = [pkt[0] | var_len ]
+            pkt = bytes(my_list) + pkt[1:]
+            
+        return super().post_build(pkt, pay)
     
     
 class EIPLongIdentifier(Packet):
@@ -359,7 +473,8 @@ class EIP(Packet):
 
 _eipiels_cls = {
     ShortIdentifierCode: EIPShortIdentifier,
-    ProcessingAcceleratorCode: EIPProcessingAccelerator
+    ProcessingAcceleratorCode: EIPProcessingAccelerator,
+    TimestampCode: EIPTimestamp,
 }
 
 
