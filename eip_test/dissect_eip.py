@@ -5,6 +5,6 @@ from scapy.layers.eip import EIP, EIPHmac, EIPShortIdentifier
 from scapy.layers.l2 import Ether
 from scapy.utils import rdpcap
 
-scapy_cap = rdpcap ("eip_long_id.pcap")
+scapy_cap = rdpcap ("eip_timestamp.pcap")
 for packet in scapy_cap:
     packet.show()

@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 from scapy.layers.inet6 import IPv6, IPv6ExtHdrHopByHop
-from scapy.layers.eip import EIP, EIPCPT, EIPHmac, EIPProcessingAccelerator, EIPShortIdentifier, EIPLongIdentifier
+from scapy.layers.eip import EIP, EIPCPT, EIPHmac, EIPProcessingAccelerator, EIPShortIdentifier, EIPLongIdentifier, EIPTimestamp
 from scapy.layers.l2 import Ether
 from scapy.utils import wrpcap
 
@@ -39,7 +39,13 @@ def test_short_hmac_long():
                 IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPShortIdentifier(id=0x1234), EIPHmac(keyid=0x1234, hmac=b'\x00\x01\x02\x03\x04\x05\x06\x07'), EIPLongIdentifier(idtype=2, seqnum=0x1234, id=b"\x00\x01\x02\x03\x04\x05\x06\07")])])
     wrpcap('eip_short_hmac_long.pcap', pkt, append=False)
 
-
+def test_timestamp():
+    pkt = Ether(src='90:e2:ba:84:d5:ec', dst='90:e2:ba:84:d7:78') / IPv6(src='faaa::1', dst='faaa::2') / \
+                IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPTimestamp(tstype=2, tslen=2, tsformat=2, timestamps=[1, 2, 3, 4])])])
+    #           IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPTimestamp()])])
+    #            IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPTimestamp(tstype=2, tslen=2, tsformat=2, timestamps=[1, 2, 3, 4])])])
+    #            IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPTimestamp()])])
+    wrpcap('eip_timestamp.pcap', pkt, append=False)
 
 
 if __name__ == '__main__':
@@ -58,4 +64,4 @@ if __name__ == '__main__':
     test_eip_processing_accelerator()
     test_short_hmac()
     test_short_hmac_long()
-    
+    test_timestamp()

@@ -1,9 +1,11 @@
 #!/usr/bin/python
 
+import re
+import time
 from scapy.compat import orb
 from scapy.error import Scapy_Exception
 from scapy.packet import Packet
-from scapy.fields import BitEnumField, BitFieldLenField, ByteEnumField, ConditionalField, FieldLenField, NBytesField, \
+from scapy.fields import BitEnumField, BitFieldLenField, ByteEnumField, ConditionalField, Field, FieldLenField, FieldListField, LongField, NBytesField, \
     ShortField, StrLenField, BitField, PacketListField, \
     ShortEnumField, ByteField, IntField, XNBytesField, XStrLenField
 from scapy.layers.inet6 import _hbhopts, _hbhoptcls, _OptionsField, _OTypeField
@@ -121,30 +123,42 @@ class EIPProcessingAccelerator(Packet):
         return b"", p
 
 
-class EIPTimestampField(IntField):
-    re_hmsm = re.compile("([0-2]?[0-9])[Hh:](([0-5]?[0-9])([Mm:]([0-5]?[0-9])([sS:.]([0-9]{0,3}))?)?)?$")  # noqa: E501
+# class EIPTimestampField(Field):
+#     re_hmsm = re.compile("([0-2]?[0-9])[Hh:](([0-5]?[0-9])([Mm:]([0-5]?[0-9])([sS:.]([0-9]{0,3}))?)?)?$")  # noqa: E501
 
-    def i2repr(self, pkt, val):
-        if val is None:
-            return "--"
-        else:
-            sec, milli = divmod(val, 1000)
-            min, sec = divmod(sec, 60)
-            hour, min = divmod(min, 60)
-            return "%d:%d:%d.%d" % (hour, min, sec, int(milli))
+#     def i2repr(self, pkt, val):
+#         if val is None:
+#             return "--"
+#         else:
+#             sec, milli = divmod(val, 1000)
+#             min, sec = divmod(sec, 60)
+#             hour, min = divmod(min, 60)
+#             return "%d:%d:%d.%d" % (hour, min, sec, int(milli))
 
-    def any2i(self, pkt, val):
-        if isinstance(val, str):
-            hmsms = self.re_hmsm.match(val)
-            if hmsms:
-                h, _, m, _, s, _, ms = hmsms.groups()
-                ms = int(((ms or "") + "000")[:3])
-                val = ((int(h) * 60 + int(m or 0)) * 60 + int(s or 0)) * 1000 + ms  # noqa: E501
-            else:
-                val = 0
-        elif val is None:
-            val = int((time.time() % (24 * 60 * 60)) * 1000)
-        return val
+#     def any2i(self, pkt, val):
+#         if isinstance(val, str):
+#             hmsms = self.re_hmsm.match(val)
+#             if hmsms:
+#                 h, _, m, _, s, _, ms = hmsms.groups()
+#                 ms = int(((ms or "") + "000")[:3])
+#                 val = ((int(h) * 60 + int(m or 0)) * 60 + int(s or 0)) * 1000 + ms  # noqa: E501
+#             else:
+#                 val = 0
+#         elif val is None:
+#             val = int((time.time() % (24 * 60 * 60)) * 1000)
+#         return val
+
+# class EIP1BytesTimestampField(ByteField, EIPTimestampField):
+#     pass
+
+# class EIP2BytesTimestampField(ShortField, EIPTimestampField):
+#     pass
+
+# class EIP4BytesTimestampField(IntField, EIPTimestampField):
+#     pass
+
+# class EIP8BytesTimestampField(LongField, EIPTimestampField):
+#     pass
 
 
 # class TimestampParamsField(ShortField):
@@ -177,19 +191,19 @@ class EIPTimestamp(Packet):
         0b1001: 'Linux epoch (only for 8 bytes) Timestamp Format',
     }
 
-    name = "EIP Short Identifier"
+    name = "EIP Timestamp"
     fields_desc = [
         BitField("code", 1, 2),
-        BitField("len", 0, 6),
+        BitField("len", None, 6),
         ByteEnumField("type", 0x03, _eipiels_base),
         ByteEnumField("tstype", 0x01, TS_TYPES),
         BitEnumField("tslen", 0b00, 2, TS_LENGTHS),
         BitEnumField("tsformat", 0b0001, 4, TS_FORMATS),
-        BitField("reserved", 0, 0),
+        BitField("reserved", 0b00, 2),
         #ShortField("params", 0),
 
-        PacketListField("timestamps", [], EIPTimestampField,
-                        length_from=lambda pkt: pkt.len)
+        FieldListField("timestamps", [], IntField("timestamp", 0),  # TODO: support variable timestamp lengths depending on the tslen field
+                        length_from=lambda pkt: pkt.len * 4)
     ]
 
     def extract_padding(self, p):
@@ -200,12 +214,12 @@ class EIPTimestamp(Packet):
         run layer specific checks
         """
         
-        if self.timestamps is not None:
-            timestamps_len = len(self.timestamps)
-            if timestamps_len % 4 != 0:
-                raise TimestampsInvalidLengthField(
-                    'timestamps must be in multiples of 4 octets - '
-                    'got timestamps of size {}'.format(timestamps_len))
+        # if self.timestamps is not None:
+        #     timestamps_len = len(self.timestamps)
+        #     if timestamps_len % 4 != 0:
+        #         raise TimestampsInvalidLengthField(
+        #             'timestamps must be in multiples of 4 octets - '
+        #             'got timestamps of size {}'.format(timestamps_len))
 
 
     def post_dissect(self, s):
