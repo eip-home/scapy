@@ -5,7 +5,7 @@ import time
 from scapy.compat import orb
 from scapy.error import Scapy_Exception
 from scapy.packet import Packet
-from scapy.fields import BitEnumField, BitFieldLenField, ByteEnumField, ConditionalField, Field, FieldLenField, FieldListField, LongField, NBytesField, \
+from scapy.fields import BitEnumField, BitFieldLenField, ByteEnumField, ConditionalField, Field, FieldLenField, FieldListField, LongField, MultipleTypeField, NBytesField, PacketField, \
     ShortField, StrLenField, BitField, PacketListField, \
     ShortEnumField, ByteField, IntField, XNBytesField, XStrLenField
 from scapy.layers.inet6 import _hbhopts, _hbhoptcls, _OptionsField, _OTypeField
@@ -17,6 +17,7 @@ TimestampCode = 0x03
 HmacCode = 0x0001
 CPTCode = 0x0002
 LongIdentifierCode = 0x0003
+GSRCode = 0x0004
 
 
 class HMACInvalidLengthField(Scapy_Exception):
@@ -60,7 +61,8 @@ _eipiels_base = {
 _eipiels_ext = {
     HmacCode: "HMAC",
     CPTCode: "CPT",
-    LongIdentifierCode: "Long Identifier"
+    LongIdentifierCode: "Long Identifier",
+    GSRCode: "Geotagging for Semantic Routing",
 }
 
 idtypes = {
@@ -376,6 +378,77 @@ class EIPHmac(Packet):
         self._check()
         return super().do_build()
 
+
+class EIPGSRPositionGeohashShort(Packet):
+    """Position Field for Geohash Short"""
+    name = "Position for GSR (Geohash Short)"
+    fields_desc = [
+        BitField("lat", 0, 15),
+        BitField("long", 0, 15),
+        BitField("padding", 0, 2),
+    ]
+
+
+class EIPGSRPositionGeohashLong(Packet):
+    """Position Field for Geohash Long"""
+    name = "Position for GSR (Geohash Long)"
+    fields_desc = [
+        BitField("lat", 0, 30),
+        BitField("long", 0, 30),
+        BitField("padding", 0, 4),
+    ]
+    
+    
+class EIPGSR(Packet):
+
+    """
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |1 0|  Length   |Geotagging for Semantic Routing|Type |   RES   |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                      Position (Variable)                      |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    """
+
+    GEOHASH_SHORT = 0b000
+    GEOHASH_LONG = 0b001
+
+    GSR_TYPES = {
+        GEOHASH_SHORT: "Geohash Short",
+        GEOHASH_LONG: "Geohash Long",
+    }
+
+    name = "EIP Geotagging for Semantic Routing (GSR)"
+    fields_desc = [
+        BitField("code", 2, 2),
+        BitField("len", None, 6),
+        ShortEnumField("type", GSRCode, _eipiels_ext),
+        BitEnumField("gsrtype", GEOHASH_SHORT, 3, GSR_TYPES),
+        BitField("reserved", 0, 5),
+        MultipleTypeField(
+            [
+                # Position for Geohash Short
+                (PacketField("position", EIPGSRPositionGeohashShort, EIPGSRPositionGeohashShort), lambda pkt: pkt.gsrtype == EIPGSR.GEOHASH_SHORT),
+                # Position for Geohash Long
+                (PacketField("position", EIPGSRPositionGeohashLong, EIPGSRPositionGeohashLong), lambda pkt: pkt.gsrtype == EIPGSR.GEOHASH_LONG),
+            ],
+            StrLenField("position", "", length_from=lambda pkt: pkt.len * 4)
+        )
+    ]
+
+    def extract_padding(self, p):
+        return b"", p
+
+    def post_build(self, pkt: bytes, pay: bytes) -> bytes:
+        if self.len is None:
+            var_len = int((len(pkt)-4)/4)
+            my_list = [pkt[0] | var_len ]
+            pkt = bytes(my_list) + pkt[1:]
+            
+        return super().post_build(pkt, pay)
+
+
 class EipIeUnknown(Packet):
 
     name = "EIP Unknown Information Element"
@@ -496,6 +569,7 @@ _eipiels_ext_cls = {
     HmacCode: EIPHmac,
     CPTCode: EIPCPT,
     LongIdentifierCode: EIPLongIdentifier,
+    GSRCode: EIPGSR,
 }
 
 

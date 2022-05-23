@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 from scapy.layers.inet6 import IPv6, IPv6ExtHdrHopByHop
-from scapy.layers.eip import EIP, EIPCPT, EIPHmac, EIPProcessingAccelerator, EIPShortIdentifier, EIPLongIdentifier, EIPTimestamp
+from scapy.layers.eip import EIP, EIPCPT, EIPGSR, EIPGSRPositionGeohashLong, EIPGSRPositionGeohashShort, EIPHmac, EIPProcessingAccelerator, EIPShortIdentifier, EIPLongIdentifier, EIPTimestamp
 from scapy.layers.l2 import Ether
 from scapy.utils import wrpcap
 
@@ -47,6 +47,22 @@ def test_timestamp():
     #            IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPTimestamp()])])
     wrpcap('eip_timestamp.pcap', pkt, append=False)
 
+def test_geohash_short():
+    pkt = Ether(src='90:e2:ba:84:d5:ec', dst='90:e2:ba:84:d7:78') / IPv6(src='faaa::1', dst='faaa::2') / \
+                IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPGSR(gsrtype=EIPGSR.GEOHASH_SHORT, position=EIPGSRPositionGeohashShort(lat=0x1234, long=0x5678))])])
+    #           IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPTimestamp()])])
+    #            IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPTimestamp(tstype=2, tslen=2, tsformat=2, timestamps=[1, 2, 3, 4])])])
+    #            IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPTimestamp()])])
+    wrpcap('eip_geohash_short.pcap', pkt, append=False)
+
+def test_geohash_long():
+    pkt = Ether(src='90:e2:ba:84:d5:ec', dst='90:e2:ba:84:d7:78') / IPv6(src='faaa::1', dst='faaa::2') / \
+                IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPGSR(gsrtype=EIPGSR.GEOHASH_LONG, position=EIPGSRPositionGeohashLong(lat=0x1234, long=0x5678))])])
+    #           IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPTimestamp()])])
+    #            IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPTimestamp(tstype=2, tslen=2, tsformat=2, timestamps=[1, 2, 3, 4])])])
+    #            IPv6ExtHdrHopByHop(options=[EIP(ielems=[EIPTimestamp()])])
+    wrpcap('eip_geohash_long.pcap', pkt, append=False)
+
 
 if __name__ == '__main__':
     #pkt = Ether(src='90:e2:ba:84:d5:ec', dst='90:e2:ba:84:d7:78') / IPv6(src='faaa::1', dst='faaa::2') / IPv6ExtHdrHopByHop(options=[EIP()])
@@ -65,3 +81,5 @@ if __name__ == '__main__':
     test_short_hmac()
     test_short_hmac_long()
     test_timestamp()
+    test_geohash_short()
+    test_geohash_long()
