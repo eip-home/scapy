@@ -1,22 +1,11 @@
-#############################################################################
-#                                                                           #
-#  inet6.py --- IPv6 support for Scapy                                      #
-#               see http://natisbad.org/IPv6/                               #
-#               for more information                                        #
-#                                                                           #
-#  Copyright (C) 2005  Guillaume Valadon <guedou@hongo.wide.ad.jp>          #
-#                      Arnaud Ebalard <arnaud.ebalard@eads.net>             #
-#                                                                           #
-#  This program is free software; you can redistribute it and/or modify it  #
-#  under the terms of the GNU General Public License version 2 as           #
-#  published by the Free Software Foundation.                               #
-#                                                                           #
-#  This program is distributed in the hope that it will be useful, but      #
-#  WITHOUT ANY WARRANTY; without even the implied warranty of               #
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU        #
-#  General Public License for more details.                                 #
-#                                                                           #
-#############################################################################
+# SPDX-License-Identifier: GPL-2.0-only
+# This file is part of Scapy
+# See https://scapy.net/ for more information
+# Copyright (C) Guillaume Valadon <guedou@hongo.wide.ad.jp>
+# Copyright (C) Arnaud Ebalard <arnaud.ebalard@eads.net>
+
+# Cool history about this file: http://natisbad.org/scapy/index.html
+
 
 """
 IPv6 (Internet Protocol v6).
@@ -824,7 +813,7 @@ class _OptionsField(PacketListField):
             autopad = 1
 
         if not autopad:
-            return b"".join(map(str, x))
+            return b"".join(map(bytes, x))
 
         curpos = self.curpos
         s = b""
@@ -1111,7 +1100,7 @@ def defragment6(packets):
                 min_pos = 0
                 min_offset = cur_offset
         res.append(lst[min_pos])
-        del(lst[min_pos])
+        del lst[min_pos]
 
     # regenerate the fragmentable part
     fragmentable = b""
@@ -1130,7 +1119,7 @@ def defragment6(packets):
     q[IPv6ExtHdrFragment].underlayer.plen = len(fragmentable)
     del q[IPv6ExtHdrFragment].underlayer.payload
     q /= conf.raw_layer(load=fragmentable)
-    del(q.plen)
+    del q.plen
 
     if q[IPv6].underlayer:
         q[IPv6] = IPv6(raw(q[IPv6]))
@@ -1161,8 +1150,8 @@ def fragment6(pkt, fragSize):
         frag = IPv6ExtHdrFragment(nh=layer3.nh)
 
         layer3.remove_payload()
-        del(layer3.nh)
-        del(layer3.plen)
+        del layer3.nh
+        del layer3.plen
 
         frag.add_payload(data)
         layer3.add_payload(frag)
@@ -3394,7 +3383,7 @@ def IPv6inIP(dst='203.178.135.36', src=None):
     if not conf.L3socket == _IPv6inIP:
         _IPv6inIP.cls = conf.L3socket
     else:
-        del(conf.L3socket)
+        del conf.L3socket
     return _IPv6inIP
 
 
@@ -3947,7 +3936,7 @@ def NDP_Attack_Kill_Default_Router(iface=None, mac_src_filter=None,
         while ICMPv6NDOptPrefixInfo in tmp:
             pio = tmp[ICMPv6NDOptPrefixInfo]
             tmp = pio.payload
-            del(pio.payload)
+            del pio.payload
             rep /= pio
 
         # ... and source link layer address option

@@ -210,6 +210,17 @@ For the moment, we have only generated one packet. Let see how to specify sets o
 
 Some operations (like building the string from a packet) can't work on a set of packets. In these cases, if you forgot to unroll your set of packets, only the first element of the list you forgot to generate will be used to assemble the packet.
 
+On the other hand, it is possible to move sets of packets into a `PacketList` object, which provides some operations on lists of packets.
+
+::
+
+    >>> p = PacketList(a)
+    >>> p
+    <PacketList: TCP:0 UDP:0 ICMP:0 Other:4>
+    >>> p = PacketList([p for p in a/c])
+    >>> p
+    <PacketList: TCP:8 UDP:0 ICMP:0 Other:0>
+
 ===============  ====================================================
 Command          Effect
 ===============  ====================================================
@@ -223,7 +234,7 @@ hexraw()         returns a hexdump of the Raw layer of all packets
 padding()        returns a hexdump of packets with padding 
 nzpadding()      returns a hexdump of packets with non-zero padding 
 plot()           plots a lambda function applied to the packet list 
-make table()     displays a table according to a lambda function 
+make\_table()    displays a table according to a lambda function 
 ===============  ====================================================
 
 
@@ -777,6 +788,7 @@ Available by default:
 - :py:class:`~scapy.sessions.TCPSession` -> *defragment certain TCP protocols*. Currently supports:
    - HTTP 1.0
    - TLS
+   - Kerberos / DCERPC
 - :py:class:`~scapy.sessions.TLSSession` -> *matches TLS sessions* on the flow.
 - :py:class:`~scapy.sessions.NetflowSession` -> *resolve Netflow V9 packets* from their NetflowFlowset information objects
 
@@ -795,7 +807,7 @@ Those sessions can be used using the ``session=`` parameter of ``sniff()``. Exam
 How to use TCPSession to defragment TCP packets
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The layer on which the decompression is applied must be immediately following the TCP layer. You need to implement a class function called ``tcp_reassemble`` that accepts the binary data and a metada dictionary as argument and returns, when full, a packet. Let's study the (pseudo) example of TLS:
+The layer on which the decompression is applied must be immediately following the TCP layer. You need to implement a class function called ``tcp_reassemble`` that accepts the binary data, a metadata dictionary as argument and returns, when full, a packet. Let's study the (pseudo) example of TLS:
 
 .. code::
 
@@ -803,7 +815,7 @@ The layer on which the decompression is applied must be immediately following th
         [...]
 
         @classmethod
-        def tcp_reassemble(cls, data, metadata):
+        def tcp_reassemble(cls, data, metadata, session):
             length = struct.unpack("!H", data[3:5])[0] + 5
             if len(data) == length:
                 return TLS(data)
@@ -1294,7 +1306,7 @@ ARP Ping
 
 The fastest way to discover hosts on a local ethernet network is to use the ARP Ping method::
 
-    >>> ans, unans = srp(Ether(dst="ff:ff:ff:ff:ff:ff")/ARP(pdst="192.168.1.0/24"),timeout=2)
+    >>> ans, unans = srp(Ether(dst="ff:ff:ff:ff:ff:ff")/ARP(pdst="192.168.1.0/24"), timeout=2)
 
 Answers can be reviewed with the following command::
 
@@ -1302,7 +1314,7 @@ Answers can be reviewed with the following command::
 
 Scapy also includes a built-in arping() function which performs similar to the above two commands:
 
-    >>> arping("192.168.1.*")
+    >>> arping("192.168.1.0/24")
 
 
 ICMP Ping
@@ -1310,7 +1322,7 @@ ICMP Ping
 
 Classical ICMP Ping can be emulated using the following command::
 
-    >>> ans, unans = sr(IP(dst="192.168.1.1-254")/ICMP())
+    >>> ans, unans = sr(IP(dst="192.168.1.0/24")/ICMP(), timeout=3)
 
 Information on live hosts can be collected with the following request::
 
@@ -1322,7 +1334,7 @@ TCP Ping
 
 In cases where ICMP echo requests are blocked, we can still use various TCP Pings such as TCP SYN Ping below::
 
-    >>> ans, unans = sr( IP(dst="192.168.1.*")/TCP(dport=80,flags="S") )
+    >>> ans, unans = sr( IP(dst="192.168.1.0/24")/TCP(dport=80,flags="S") )
 
 Any response to our probes will indicate a live host. We can collect results with the following command::
 
@@ -1430,7 +1442,7 @@ IKE Scanning
 We try to identify VPN concentrators by sending ISAKMP Security Association proposals
 and receiving the answers::
 
-    >>> res, unans = sr( IP(dst="192.168.1.*")/UDP()
+    >>> res, unans = sr( IP(dst="192.168.1.0/24")/UDP()
                     /ISAKMP(init_cookie=RandString(8), exch_type="identity prot.") 
                     /ISAKMP_payload_SA(prop=ISAKMP_payload_Proposal()) 
                   ) 
@@ -1438,8 +1450,37 @@ and receiving the answers::
 Visualizing the results in a list::
 
     >>> res.nsummary(prn=lambda s,r: r.src, lfilter=lambda s,r: r.haslayer(ISAKMP) ) 
-    
-  
+
+
+DNS spoof
+---------
+
+See :class:`~scapy.layers.dns.DNS_am`::
+
+    >>> dns_spoof(iface="tap0", joker="192.168.1.1")
+
+LLMNR spoof
+-----------
+
+See :class:`~scapy.layers.llmnr.LLMNR_am`::
+
+    >>> conf.iface = "tap0"
+    >>> llmnr_spoof(iface="tap0", filter_ips=Net("10.0.0.1/24"))
+
+Netbios spoof
+-------------
+
+See :class:`~scapy.layers.netbios.NBNS_am`::
+
+    >>> nbns_spoof(iface="eth0")  # With local IP
+    >>> nbns_spoof(iface="eth0", ip="192.168.122.17")  # With some other IP
+
+Node status request (get NetbiosName from IP)
+---------------------------------------------
+
+.. code::
+
+    >>> sr1(IP(dst="192.168.122.17")/UDP()/NBNSHeader()/NBNSNodeStatusRequest())
 
 Advanced traceroute
 -------------------
