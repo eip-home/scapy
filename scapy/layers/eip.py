@@ -285,23 +285,87 @@ class EIPLongIdentifier(Packet):
             pkt = bytes(my_list) + pkt[1:]
             
         return super().post_build(pkt, pay)
+
+
+# class MCDElement(Packet):
+
+#     name = "MCD Element"
+#     fields_desc = [
+#         BitField("code", 2, 2),
+#         BitField("len", None, 6),
+#         #BitFieldLenField("len", None, 6, length_of="mcdstack", adjust=lambda _,x: int(x/4)),
+#         #FieldLenField("lennew", None, length_of="hmac", fmt="B"),
+#         ShortEnumField("type", CPTCode, _eipiels_ext),
+#         BitField("subtype", 0, 3),
+#         BitField("reserved", 0, 5),
+#         XStrLenField("mcdstack", 40 * b"\x00", length_from=lambda pkt: 0 if pkt.len is None else (pkt.len * 4)-4)
+#     ]
+
+
+class MCDElementUltra(Packet):
+
+    name = "MCD Element (Ultra Compact)"
+    fields_desc = [
+        BitField("ts", 0, 8),
+        BitField("intf", 0, 12),
+        BitField("load", 0, 4),
+    ]
+
+
+class MCDElementCompact(Packet):
+
+    name = "MCD Element (Compact)"
+    fields_desc = [
+        BitField("ts", 0, 10),
+        BitField("intf", 0, 16),
+        BitField("load", 0, 4),
+        BitField("tshift", 0, 2),
+    ]
     
     
 class EIPCPT(Packet):
 
+    """
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |1 0|  Length   |         Compact PT            |Type |A|HML|RES|
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    ~                          MCD  Stack                           ~
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    """
+
     # we are adding by default 8 bytes MCD stack initialized with
     # 40 b"\00"
+
+    CPT_ULTRA = 0b000
+    CPT_COMPACT = 0b001
+
+    _cpt_types = {
+        CPT_ULTRA: "Ultra Compact",
+        CPT_COMPACT: "Compact"
+    }
 
     name = "EIP CPT"
     fields_desc = [
         BitField("code", 2, 2),
         BitField("len", None, 6),
-        #BitFieldLenField("len", None, 6, length_of="mcdstack", adjust=lambda _,x: int(x/4)),
-        #FieldLenField("lennew", None, length_of="hmac", fmt="B"),
         ShortEnumField("type", CPTCode, _eipiels_ext),
-        BitField("subtype", 0, 3),
-        BitField("reserved", 0, 5),
-        XStrLenField("mcdstack", 40 * b"\x00", length_from=lambda pkt: 0 if pkt.len is None else (pkt.len * 4)-4)
+        BitEnumField("cpttype", CPT_ULTRA, 3, _cpt_types),
+        BitField("a", 0, 1),
+        BitField("hml", 0, 2),
+        BitField("reserved", 0, 2),
+        MultipleTypeField(
+            [
+                # MCD Stack (MCD Ultra Compact)
+                (PacketListField("mcdstack", [], MCDElementUltra, length_from=lambda pkt: pkt.len * 4), lambda pkt: pkt.cpttype == EIPCPT.CPT_ULTRA),
+                # MCD Stack (MCD Compact)
+                (PacketListField("mcdstack", [], MCDElementCompact, length_from=lambda pkt: pkt.len * 4), lambda pkt: pkt.cpttype == EIPCPT.CPT_COMPACT),
+            ],
+            StrLenField("mcdstack", "", length_from=lambda pkt: pkt.len * 4)
+        )
     ]
 
     def extract_padding(self, p):
